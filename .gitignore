@@ -1,0 +1,49 @@
+# =============================================================
+#  Krypt - Git Ignore
+# =============================================================
+
+# Entornos virtuales y Python
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# PyInstaller y compilaciones
+build/
+dist/
+*.spec.bak
+
+# Instaladores generados (pesan >100MB, subir a Releases de GitHub en vez del repo)
+dist_installer/
+
+# Binarios pesados locales (>400MB)
+bin/*.exe
+
+# Grabaciones y transcripciones personales (Privacidad de usuario)
+grabaciones/
+transcripciones/
+*.raw
+*.wav
+*.mp3
+*.ogg
+*.opus
+*.m4a
+
+# Bases de datos y configuraciones locales
+recordings.json
+config.json
+settings.json
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE y editores
+.vscode/
+.idea/
+*.swp
