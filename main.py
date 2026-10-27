@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║  KRYPT v3.3 — Transcriptor Inteligente de Reuniones y Audio      ║
+║  KRYPT v3.4 — Transcriptor Inteligente de Reuniones y Audio      ║
 ║  Captura audio del sistema + micrófono → Transcribe con Gemini   ║
 ║  Creado por Cristian Novoa · DMT Agencia                         ║
 ╚══════════════════════════════════════════════════════════════════╝
@@ -36,7 +36,7 @@ from PySide6.QtGui import (
 #  APPLICATION IDENTITY & PATHS
 # ═════════════════════════════════════════════════════════════════
 APP_NAME = "Krypt"
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 APP_AUTHOR = "Cristian Novoa · DMT Agencia"
 
 # Directorio base del aplicativo (soporta modo script y PyInstaller frozen)
@@ -325,6 +325,8 @@ RETRY_DELAYS = [20, 45, 90]  # segundos entre reintentos (igual que CLI, más co
 
 MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun",
              "jul", "ago", "sep", "oct", "nov", "dic"]
+MONTHS_ES_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                  "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -403,15 +405,24 @@ class RecordingsDB:
             try:
                 self.records = json.loads(DB_PATH.read_text(encoding="utf-8"))
             except Exception:
+                # Archivo dañado: se aparta en vez de sobrescribirlo con una lista vacía
+                try:
+                    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    DB_PATH.replace(DB_PATH.with_name(f"recordings.danado-{stamp}.json"))
+                except Exception:
+                    pass
                 self.records = []
         else:
             self.records = []
 
     def _save(self):
-        DB_PATH.write_text(
+        # Escritura atómica: un corte de luz a mitad de escritura no deja el JSON roto
+        tmp = DB_PATH.with_suffix(".json.tmp")
+        tmp.write_text(
             json.dumps(self.records, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        os.replace(tmp, DB_PATH)
 
     def add(self, rec: dict):
         self.records.insert(0, rec)
@@ -438,15 +449,22 @@ class RecordingsDB:
 # ═════════════════════════════════════════════════════════════════
 #  AUDIO RECORDER — Optimized: streams to disk, ~5MB RAM constant
 # ═════════════════════════════════════════════════════════════════
-MIX_CHUNK_SECONDS = 10  # Process audio in 10-second chunks during mixing
+MIX_CHUNK_SECONDS = 10  # Process audio in 10-second chunks during mixing (fallback numpy)
+LOOPBACK_GAP_FILL_SECONDS = 0.5  # Huecos del audio del sistema mayores a esto se rellenan con silencio
 
 
 class AudioRecorder:
     """
     Records system audio (WASAPI loopback) + microphone.
     Audio is streamed directly to temp files on disk to avoid RAM
-    accumulation. Mixing is done in small chunks post-recording.
-    RAM usage: ~5 MB constant regardless of recording duration.
+    accumulation. Mixing is done post-recording (FFmpeg, o numpy por bloques).
+
+    Sincronía: WASAPI loopback NO entrega datos mientras nada suena en el PC.
+    Para que las dos pistas queden alineadas en el tiempo:
+      1. Se reproduce silencio inaudible en la salida mientras se graba, así
+         Windows entrega el audio del sistema de forma continua.
+      2. Red de seguridad: si aun así hay un hueco, se rellena con silencio
+         según el reloj real (descontando las pausas).
     """
 
     def __init__(self):
@@ -455,6 +473,7 @@ class AudioRecorder:
         self._pa = None
         self._loopback_stream = None
         self._mic_stream = None
+        self._silence_stream = None
         self._loopback_info = None
         self._mic_info = None
         self._target_rate = 44100
@@ -464,6 +483,9 @@ class AudioRecorder:
         self._loopback_channels = 2
         self._mic_rate = 44100
         self._mic_channels = 1
+        # Pausas (reloj monotónico) para el relleno de huecos
+        self._paused_total = 0.0
+        self._pause_began = None
         # File handles for disk streaming
         self._lb_fh = None
         self._mc_fh = None
@@ -471,14 +493,15 @@ class AudioRecorder:
         self._mc_temp_path = None
 
     def _find_loopback(self, pa):
+        """Devuelve (dispositivo loopback, dispositivo de salida predeterminado)."""
         pyaudio = _ensure_pyaudio()
         wasapi = pa.get_host_api_info_by_type(pyaudio.paWASAPI)
         out = pa.get_device_info_by_index(wasapi["defaultOutputDevice"])
         if out.get("isLoopbackDevice"):
-            return out
+            return out, out
         for dev in pa.get_loopback_device_info_generator():
             if out["name"] in dev["name"]:
-                return dev
+                return dev, out
         raise RuntimeError(
             "No se encontró dispositivo de loopback WASAPI.\n"
             "Conecta altavoces o auriculares."
@@ -489,27 +512,67 @@ class AudioRecorder:
         wasapi = pa.get_host_api_info_by_type(pyaudio.paWASAPI)
         return pa.get_device_info_by_index(wasapi["defaultInputDevice"])
 
-    def _record_to_disk(self, stream, fh, chunk):
-        """Record thread: reads from stream, writes raw PCM to disk."""
+    def _start_silence(self, out):
+        """Reproduce silencio en la salida para que el loopback no se detenga."""
+        pyaudio = _ensure_pyaudio()
+        if out.get("isLoopbackDevice") or int(out.get("maxOutputChannels", 0)) < 1:
+            return
+        channels = min(int(out["maxOutputChannels"]), 2)
+        frame_bytes = channels * SAMPLE_WIDTH
+
+        def _callback(in_data, frame_count, time_info, status):
+            return (bytes(frame_count * frame_bytes), pyaudio.paContinue)
+
+        try:
+            self._silence_stream = self._pa.open(
+                format=pyaudio.paInt16, channels=channels,
+                rate=int(out["defaultSampleRate"]), output=True,
+                output_device_index=out["index"], stream_callback=_callback,
+            )
+            self._silence_stream.start_stream()
+        except Exception:
+            self._silence_stream = None  # el relleno de huecos sigue cubriendo
+
+    def _paused_seconds(self) -> float:
+        extra = time.monotonic() - self._pause_began if self._pause_began else 0.0
+        return self._paused_total + extra
+
+    def _record_to_disk(self, stream, fh, chunk, rate=None, frame_bytes=None):
+        """Record thread: reads from stream, writes raw PCM to disk.
+        Con rate/frame_bytes (loopback) rellena con silencio los huecos."""
         write_count = 0
+        written_frames = 0
+        t0 = time.monotonic()
         while self.is_recording:
             try:
                 data = stream.read(chunk, exception_on_overflow=False)
-                if not self.is_paused:
-                    fh.write(data)
-                    write_count += 1
-                    # Flush to disk every ~2 seconds for crash safety
-                    if write_count % 86 == 0:  # ~86 reads/sec at 44100/1024
-                        fh.flush()
             except Exception:
-                if self.is_recording:
-                    continue
-                break
+                if not self.is_recording:
+                    break
+                time.sleep(0.05)  # dispositivo caído: no consumir 100% de CPU
+                continue
+            if self.is_paused:
+                continue
+            if rate:
+                n = len(data) // frame_bytes
+                expected = int((time.monotonic() - t0 - self._paused_seconds()) * rate)
+                gap = expected - (written_frames + n)
+                if gap > rate * LOOPBACK_GAP_FILL_SECONDS:
+                    fh.write(bytes(gap * frame_bytes))
+                    written_frames += gap
+                written_frames += n
+            fh.write(data)
+            write_count += 1
+            # Flush to disk every ~2 seconds for crash safety
+            if write_count % 86 == 0:  # ~86 reads/sec at 44100/1024
+                fh.flush()
 
     def start(self):
         pyaudio = _ensure_pyaudio()
         self._pa = pyaudio.PyAudio()
         self.is_paused = False
+        self._paused_total = 0.0
+        self._pause_began = None
         RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
         # Create temp files for raw PCM (streamed to disk, not RAM)
@@ -522,7 +585,7 @@ class AudioRecorder:
         self._lb_fh = open(self._lb_temp_path, "wb")
 
         # Loopback
-        self._loopback_info = self._find_loopback(self._pa)
+        self._loopback_info, out_dev = self._find_loopback(self._pa)
         lb = self._loopback_info
         self._loopback_rate = int(lb["defaultSampleRate"])
         self._loopback_channels = lb["maxInputChannels"]
@@ -551,11 +614,13 @@ class AudioRecorder:
             self._mic_info = None
             self._mic_stream = None
 
+        self._start_silence(out_dev)
         self.is_recording = True
 
         self._thread_loopback = threading.Thread(
             target=self._record_to_disk,
-            args=(self._loopback_stream, self._lb_fh, 1024),
+            args=(self._loopback_stream, self._lb_fh, 1024,
+                  self._loopback_rate, self._loopback_channels * SAMPLE_WIDTH),
             daemon=True,
         )
         self._thread_loopback.start()
@@ -569,25 +634,33 @@ class AudioRecorder:
             self._thread_mic.start()
 
     def pause(self):
+        if not self.is_paused:
+            self._pause_began = time.monotonic()
         self.is_paused = True
 
     def resume(self):
+        if self._pause_began:
+            self._paused_total += time.monotonic() - self._pause_began
+            self._pause_began = None
         self.is_paused = False
 
     def stop(self) -> Path:
         self.is_recording = False
 
+        # El silencio sigue sonando hasta que los hilos terminan: así el
+        # read() del loopback no se queda bloqueado esperando audio.
         for t in [self._thread_loopback, self._thread_mic]:
             if t:
                 t.join(timeout=3)
 
-        for s in [self._loopback_stream, self._mic_stream]:
+        for s in [self._loopback_stream, self._mic_stream, self._silence_stream]:
             if s:
                 try:
                     s.stop_stream()
                     s.close()
                 except Exception:
                     pass
+        self._silence_stream = None
 
         # Close temp file handles
         if self._lb_fh:
@@ -623,15 +696,56 @@ class AudioRecorder:
             if rem:
                 audio = audio[:-rem]
             audio = audio.reshape(-1, channels).mean(axis=1)
-        if rate != self._target_rate:
-            n = int(len(audio) / rate * self._target_rate)
-            if n > 0:
-                audio = audio[np.linspace(0, len(audio) - 1, n).astype(int)]
+        if rate != self._target_rate and len(audio):
+            # Interpolación lineal (antes se tomaba la muestra más cercana → distorsión)
+            n = int(round(len(audio) / rate * self._target_rate))
+            audio = np.interp(np.linspace(0, len(audio) - 1, n),
+                              np.arange(len(audio)), audio).astype(np.float32)
         return audio
 
+    def _mix_with_ffmpeg(self, has_mic: bool) -> Path | None:
+        """Mezcla las pistas crudas directo a MP3 con FFmpeg (remuestreo de
+        alta calidad, sin cortar la pista más larga). None si FFmpeg falla."""
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = RECORDINGS_DIR / f"REC_{ts}.mp3"
+        cmd = [get_ffmpeg_bin(), "-y",
+               "-f", "s16le", "-ar", str(self._loopback_rate),
+               "-ac", str(self._loopback_channels), "-i", str(self._lb_temp_path)]
+        if has_mic:
+            cmd += ["-f", "s16le", "-ar", str(self._mic_rate),
+                    "-ac", str(self._mic_channels), "-i", str(self._mc_temp_path),
+                    "-filter_complex",
+                    "[0:a]aformat=sample_rates=48000:channel_layouts=mono[a];"
+                    "[1:a]aformat=sample_rates=48000:channel_layouts=mono[b];"
+                    "[a][b]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95"]
+        cmd += ["-ar", str(self._target_rate), "-ac", "1",
+                "-codec:a", "libmp3lame", "-b:a", "48k", str(path)]
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           check=True, creationflags=_SUBPROCESS_FLAGS)
+            if path.exists() and path.stat().st_size > 0:
+                return path
+        except Exception:
+            pass
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
     def _mix_from_disk(self) -> Path:
-        """Mix loopback + mic from temp files in small chunks. Peak RAM ~5 MB."""
+        """Mezcla loopback + mic. Primero FFmpeg (→ MP3); si no está, numpy por
+        bloques (→ WAV, RAM ~5 MB)."""
         RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+        has_mic = bool(self._mic_info and self._mc_temp_path and self._mc_temp_path.exists()
+                       and self._mc_temp_path.stat().st_size > 0)
+        has_lb = self._lb_temp_path and self._lb_temp_path.exists()
+
+        if has_lb:
+            mp3 = self._mix_with_ffmpeg(has_mic)
+            if mp3:
+                return mp3
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = RECORDINGS_DIR / f"REC_{ts}.wav"
@@ -639,9 +753,6 @@ class AudioRecorder:
         # Bytes per MIX_CHUNK_SECONDS for each source
         lb_chunk_bytes = MIX_CHUNK_SECONDS * self._loopback_rate * self._loopback_channels * SAMPLE_WIDTH
         mc_chunk_bytes = MIX_CHUNK_SECONDS * self._mic_rate * self._mic_channels * SAMPLE_WIDTH
-
-        has_mic = self._mic_info and self._mc_temp_path and self._mc_temp_path.exists()
-        has_lb = self._lb_temp_path and self._lb_temp_path.exists()
 
         if not has_lb:
             # No audio at all — create 1 second of silence
@@ -663,28 +774,24 @@ class AudioRecorder:
 
             mc_f = open(self._mc_temp_path, "rb") if has_mic else None
 
+            np = _ensure_numpy()
             try:
                 while True:
                     lb_raw = lb_f.read(lb_chunk_bytes)
-                    if not lb_raw:
+                    mc_raw = mc_f.read(mc_chunk_bytes) if mc_f else b""
+                    if not lb_raw and not mc_raw:
                         break
 
+                    # Ninguna pista se corta: la más corta se completa con silencio
                     lb_mono = self._chunk_to_mono(lb_raw, self._loopback_channels, self._loopback_rate)
-
-                    if mc_f:
-                        mc_raw = mc_f.read(mc_chunk_bytes)
-                        if mc_raw:
-                            mc_mono = self._chunk_to_mono(mc_raw, self._mic_channels, self._mic_rate)
-                            np = _ensure_numpy()
-                            n = min(len(lb_mono), len(mc_mono))
-                            mixed = np.clip(lb_mono[:n] * 0.7 + mc_mono[:n] * 0.5, -1.0, 1.0)
-                        else:
-                            mixed = lb_mono
-                    else:
-                        mixed = lb_mono
+                    mc_mono = self._chunk_to_mono(mc_raw, self._mic_channels, self._mic_rate)
+                    n = max(len(lb_mono), len(mc_mono))
+                    mixed = np.zeros(n, dtype=np.float32)
+                    mixed[:len(lb_mono)] += lb_mono * 0.7
+                    mixed[:len(mc_mono)] += mc_mono * 0.5
+                    mixed = np.clip(mixed, -1.0, 1.0)
 
                     # Write chunk to output WAV
-                    np = _ensure_numpy()
                     pcm = (mixed * 32767).astype(np.int16)
                     out_wf.writeframes(pcm.tobytes())
             finally:
@@ -692,6 +799,39 @@ class AudioRecorder:
                     mc_f.close()
 
         return path
+
+
+def finalize_recording(recorder: AudioRecorder) -> Path:
+    """Detiene la grabación, mezcla y deja el audio final en MP3 (si se puede)."""
+    path = recorder.stop()
+    if path.suffix.lower() == ".wav":
+        mp3 = compress_to_mp3(path)
+        if mp3 != path and mp3.exists():
+            try:
+                path.unlink()
+            except Exception:
+                pass
+            path = mp3
+    return path
+
+
+class SaveRecordingWorker(QThread):
+    """Mezcla y compresión fuera del hilo de la UI (en reuniones largas la
+    ventana quedaba 'No responde' mientras se guardaba)."""
+    done = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, recorder: AudioRecorder):
+        super().__init__()
+        self.recorder = recorder
+        self.result: Path | None = None
+
+    def run(self):
+        try:
+            self.result = finalize_recording(self.recorder)
+            self.done.emit(str(self.result))
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -972,56 +1112,62 @@ class TranscriptionWorker(QThread):
         client = genai.Client(api_key=api_key)
         transcriptions = []
 
-        for i, chunk in enumerate(chunks):
-            num = i + 1
-            base = 10 + int(i / total * 80)
-            is_temp = chunk != self.audio_path  # temp chunk to delete later
+        try:
+            for i, chunk in enumerate(chunks):
+                num = i + 1
+                base = 10 + int(i / total * 80)
 
-            # Upload
-            self.signals.progress.emit(f"Subiendo audio ({num}/{total})…", base)
-            uploaded = client.files.upload(file=str(chunk))
-
-            # Wait for ACTIVE
-            self.signals.progress.emit(f"Procesando ({num}/{total})…", base + 5)
-            for _ in range(60):
-                info = client.files.get(name=uploaded.name)
-                if info.state and info.state.name == "ACTIVE":
-                    break
-                time.sleep(2)
-
-            # Transcribe
-            self.signals.progress.emit(
-                f"Transcribiendo ({num}/{total})… Puede tomar minutos.",
-                base + int(40 / total),
-            )
-            # Calculate actual offset in seconds and minutes from chunk position
-            offset_seconds = i * CHUNK_DURATION_SECONDS
-            offset_minutes = offset_seconds // 60
-
-            if self.model == "gemini-3.5-transcribe":
-                response_text = self._call_gemini_interactions(client, uploaded, float(offset_seconds))
-            else:
-                prompt = self._prompt(offset_minutes, num, total)
-                response_text = self._call_gemini(client, [prompt, uploaded])
-
-            transcriptions.append(response_text)
-
-            # Cleanup remote file
-            try:
-                client.files.delete(name=uploaded.name)
-            except Exception:
-                pass
-
-            # Cleanup temp chunk
-            if is_temp:
+                # Upload
+                self.signals.progress.emit(f"Subiendo audio ({num}/{total})…", base)
+                uploaded = client.files.upload(file=str(chunk))
                 try:
-                    chunk.unlink()
+                    # Wait for ACTIVE
+                    self.signals.progress.emit(f"Procesando ({num}/{total})…", base + 5)
+                    for _ in range(60):
+                        info = client.files.get(name=uploaded.name)
+                        state = info.state.name if info.state else ""
+                        if state == "ACTIVE":
+                            break
+                        if state == "FAILED":
+                            raise RuntimeError("Google no pudo procesar el archivo de audio (estado FAILED).")
+                        time.sleep(2)
+
+                    # Transcribe
+                    self.signals.progress.emit(
+                        f"Transcribiendo ({num}/{total})… Puede tomar minutos.",
+                        base + int(40 / total),
+                    )
+                    # Calculate actual offset in seconds and minutes from chunk position
+                    offset_seconds = i * CHUNK_DURATION_SECONDS
+                    offset_minutes = offset_seconds // 60
+
+                    if self.model == "gemini-3.5-transcribe":
+                        response_text = self._call_gemini_interactions(client, uploaded, float(offset_seconds))
+                    else:
+                        prompt = self._prompt(offset_minutes, num, total)
+                        response_text = self._call_gemini(client, [prompt, uploaded])
+
+                    transcriptions.append(response_text)
+                finally:
+                    # El audio no se queda en los servidores de Google aunque falle
+                    try:
+                        client.files.delete(name=uploaded.name)
+                    except Exception:
+                        pass
+
+                # Small pause between chunks to avoid rate limits
+                if num < total:
+                    time.sleep(3)
+        finally:
+            # Partes temporales (y su carpeta) se borran pase lo que pase
+            temp_chunks = [c for c in chunks if c != self.audio_path]
+            for c in temp_chunks:
+                try:
+                    c.unlink(missing_ok=True)
                 except Exception:
                     pass
-
-            # Small pause between chunks to avoid rate limits
-            if num < total:
-                time.sleep(3)
+            if temp_chunks:
+                shutil.rmtree(temp_chunks[0].parent, ignore_errors=True)
 
         # Save markdown
         self.signals.progress.emit("Generando Markdown…", 92)
@@ -1033,13 +1179,13 @@ class TranscriptionWorker(QThread):
     def _prompt(self, offset_min: int, chunk_num: int, total: int) -> str:
         offset_note = ""
         if total > 1:
-            h = offset_min // 60
-            m = offset_min % 60
+            # Ejemplo: 5 min 30 s dentro del segmento (antes el minuto podía pasar de 59)
+            h, m = divmod(offset_min + 5, 60)
             offset_note = (
                 f"\n\nEste es el segmento {chunk_num} de {total}. "
                 f"Los timestamps del audio empiezan en 0:00 pero debes mostrarlos "
                 f"sumando {offset_min} minutos al tiempo real del audio. "
-                f"Ejemplo: si el audio marca 00:05:30, escribe [{h:02d}:{m+5:02d}:30]. "
+                f"Ejemplo: si el audio marca 00:05:30, escribe [{h:02d}:{m:02d}:30]. "
                 f"El segmento empieza en el minuto {offset_min} de la reunión total."
             )
         return f"""Eres un transcriptor profesional de reuniones. Tu única tarea es 
@@ -1068,17 +1214,21 @@ Solo la transcripción:"""
     # ── Save Markdown ────────────────────────────────────────
     def _save_md(self, parts: list[str]) -> Path:
         TRANSCRIPTIONS_DIR.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        dt_display = datetime.now().strftime("%d de %B de %Y, %H:%M")
+        now = datetime.now()
+        ts = now.strftime("%Y-%m-%d_%H-%M-%S")
+        # %B depende del idioma de Windows (salía "October"); se arma en español
+        dt_display = f"{now.day} de {MONTHS_ES_FULL[now.month - 1]} de {now.year}, {now:%H:%M}"
         fname = f"Transcripcion_{ts}.md"
         path = TRANSCRIPTIONS_DIR / fname
 
+        segments = (f"{len(parts)} de {CHUNK_DURATION_SECONDS // 60} min cada uno"
+                    if len(parts) > 1 else "1 (audio completo)")
         lines = [
             f"# 📝 {self.rec_name}",
             "",
             f"**Fecha:** {dt_display}",
             f"**Modelo:** {self.model}",
-            f"**Segmentos:** {len(parts)} de {CHUNK_DURATION_SECONDS // 60} min cada uno",
+            f"**Segmentos:** {segments}",
             "",
             "---",
             "",
@@ -1641,6 +1791,8 @@ class TranscriptorWindow(QMainWindow):
         self.settings = load_settings()
         self.recorder = AudioRecorder()
         self.worker: TranscriptionWorker | None = None
+        self._save_worker: SaveRecordingWorker | None = None
+        self._pending_duration = 0.0
         self.is_recording = False
         self.is_paused = False
         self._rec_start = 0.0
@@ -2174,24 +2326,36 @@ class TranscriptorWindow(QMainWindow):
         # Calculate duration
         if self.is_paused:
             self._paused_total += time.time() - self._pause_start
-        duration = time.time() - self._rec_start - self._paused_total
+        self.is_paused = False
+        self._pending_duration = time.time() - self._rec_start - self._paused_total
 
-        # Stop recording → get audio file
-        wav_path = self.recorder.stop()
+        # Mezcla y compresión en segundo plano (la ventana no se congela)
+        self._save_worker = SaveRecordingWorker(self.recorder)
+        self._save_worker.done.connect(self._on_recording_saved)
+        self._save_worker.failed.connect(self._on_recording_save_failed)
+        self._save_worker.start()
 
-        # Compress to MP3
-        self.status_lbl.setText("Comprimiendo audio a MP3...")
-        self.status_lbl.setStyleSheet(f"color: {C['amber']};")
-        QApplication.processEvents()
+    def _on_recording_saved(self, audio_path_str: str):
+        rec_id = self._register_recording(Path(audio_path_str), self._pending_duration)
 
-        audio_path = compress_to_mp3(wav_path)
+        # Reset button
+        self.btn_record.setText("⏺  Grabar")
+        self.btn_record.setEnabled(True)
+        self.status_lbl.setText("✅ Audio guardado")
+        self.status_lbl.setStyleSheet(f"color: {C['green']};")
 
-        # Cleanup original WAV if compression succeeded
-        if audio_path != wav_path and audio_path.exists():
-            try:
-                wav_path.unlink()
-            except Exception:
-                pass
+        # Auto-start transcription
+        self._start_transcription(rec_id)
+
+    def _on_recording_save_failed(self, error_msg: str):
+        self.btn_record.setText("⏺  Grabar")
+        self.btn_record.setEnabled(True)
+        self.status_lbl.setText(f"❌ No se pudo guardar el audio: {error_msg[:120]}")
+        self.status_lbl.setStyleSheet(f"color: {C['red']};")
+
+    def _register_recording(self, audio_path: Path, fallback_duration: float) -> str:
+        # La duración real del archivo manda; el reloj de la ventana es respaldo
+        duration = get_audio_duration(audio_path) or fallback_duration
 
         # Register in DB
         ts = datetime.now()
@@ -2210,15 +2374,7 @@ class TranscriptorWindow(QMainWindow):
         })
 
         self._refresh_history()
-
-        # Reset button
-        self.btn_record.setText("⏺  Grabar")
-        self.btn_record.setEnabled(True)
-        self.status_lbl.setText("✅ Audio guardado")
-        self.status_lbl.setStyleSheet(f"color: {C['green']};")
-
-        # Auto-start transcription
-        self._start_transcription(rec_id)
+        return rec_id
 
     # ── UPLOAD EXTERNAL AUDIO ────────────────────────────────
     def _on_upload_audio(self):
@@ -2259,7 +2415,6 @@ class TranscriptorWindow(QMainWindow):
         base_name = f"UPLOAD_{ts.strftime('%Y%m%d_%H%M%S')}"
 
         # Copiar y convertir a MP3 si no es MP3
-        import shutil
         if src.suffix.lower() == ".mp3":
             dest = RECORDINGS_DIR / f"{base_name}.mp3"
             shutil.copy2(str(src), str(dest))
@@ -2268,7 +2423,7 @@ class TranscriptorWindow(QMainWindow):
             dest = RECORDINGS_DIR / f"{base_name}.mp3"
             try:
                 cmd = [
-                    "ffmpeg", "-y", "-i", str(src),
+                    get_ffmpeg_bin(), "-y", "-i", str(src),
                     "-codec:a", "libmp3lame", "-b:a", "48k", "-ac", "1",
                     str(dest)
                 ]
@@ -2482,8 +2637,43 @@ class TranscriptorWindow(QMainWindow):
 
     # ── CLOSE EVENT ──────────────────────────────────────────
     def closeEvent(self, event):
+        busy = self.worker is not None and self.worker.isRunning()
+        if busy:
+            reply = QMessageBox.question(
+                self, "Transcripción en curso",
+                "Hay una transcripción en curso. Si cierras Krypt se cancelará\n"
+                "(el audio queda guardado y puedes reintentarla después).\n\n¿Cerrar de todos modos?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+
         if self.is_recording:
-            self._on_stop()
+            # Guardar de forma síncrona: la app se va a cerrar
+            self.is_recording = False
+            self._tick_timer.stop()
+            if self.is_paused:
+                self._paused_total += time.time() - self._pause_start
+            duration = time.time() - self._rec_start - self._paused_total
+            self.status_lbl.setText("Guardando grabación…")
+            QApplication.processEvents()
+            try:
+                self._register_recording(finalize_recording(self.recorder), duration)
+            except Exception:
+                pass
+        elif self._save_worker is not None and self._save_worker.isRunning():
+            # Registrar aquí (sin auto-transcribir): la señal ya no llegaría
+            self._save_worker.done.disconnect()
+            self._save_worker.wait()
+            if self._save_worker.result:
+                self._register_recording(self._save_worker.result, self._pending_duration)
+
+        if busy:
+            # Un QThread vivo al salir hace que Python aborte; la tarjeta queda
+            # como "error" al reabrir (_recover_stuck_transcriptions).
+            self.worker.terminate()
+            self.worker.wait(2000)
         event.accept()
 
 

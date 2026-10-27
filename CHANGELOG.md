@@ -2,6 +2,46 @@
 
 Todas las versiones y cambios relevantes del proyecto.
 
+## [v3.4] — 2026-10-27
+
+### 🐛 Corrección crítica: audio del sistema y micrófono desfasados
+- **Síntoma:** en algunos PC la grabación salía "superpuesta": lo que sonaba en el PC (YouTube, la llamada) aparecía encima de
+  la voz grabada antes, el archivo duraba menos que la grabación real y la transcripción salía mezclada.
+- **Causa:** Windows (WASAPI loopback) no entrega audio del sistema mientras nada suena. La pista del sistema quedaba sin sus
+  silencios y, al mezclarla con el micrófono (continuo), ambas se alineaban desde el segundo 0. La mezcla además se cortaba
+  donde terminaba la pista del sistema. Ej.: 73,6 s grabados → MP3 de 28 s.
+- **Corrección:** mientras graba, Krypt reproduce silencio inaudible para que Windows entregue el audio del sistema sin
+  cortes; y como red de seguridad, cualquier hueco mayor a 0,5 s se rellena con silencio según el reloj real (descontando
+  pausas). La mezcla ya no corta la pista más larga.
+- **Verificado:** 3 s silencio + 2 s de sonido + 3 s silencio → v3.3 producía 1,98 s con el sonido al inicio; v3.4 produce
+  8 s con el sonido entre el segundo 3 y el 5.
+
+### 🎧 Mejor calidad de audio
+- La mezcla la hace **FFmpeg directo a MP3** (remuestreo de alta calidad y limitador para evitar saturación). Antes se
+  remuestreaba tomando la muestra más cercana, lo que distorsionaba cuando el dispositivo trabaja a 48 kHz. Si FFmpeg
+  faltara, queda la mezcla con numpy (ahora con interpolación lineal).
+
+### ⚡ Rendimiento y estabilidad
+- **Guardar ya no congela la ventana:** la mezcla y compresión corren en segundo plano (en reuniones largas la app quedaba
+  "No responde").
+- **Sin 100% de CPU** si se desconecta el dispositivo de audio a mitad de una grabación.
+- **Duración real:** el historial muestra la duración del archivo, no la del cronómetro.
+- **Cerrar la app grabando** guarda la grabación sin lanzar una transcripción que se cortaría; si hay una transcripción en
+  curso, pregunta antes de cerrar (antes la app podía cerrarse con error).
+
+### 🛡️ Datos y privacidad
+- **`recordings.json` a prueba de cortes de luz:** escritura atómica; si el archivo está dañado se aparta como
+  `recordings.danado-<fecha>.json` en vez de perder el historial.
+- **El audio no queda en los servidores de Google** si una transcripción falla (antes solo se borraba si salía bien).
+- Las partes temporales de audios largos y su carpeta se borran siempre.
+
+### 🔧 Otras correcciones
+- **📎 Subir Audio** convertía con un `ffmpeg` que no existe en el PC: ahora usa el FFmpeg incluido (los audios de WhatsApp
+  sí se comprimen).
+- Si Google no puede procesar el audio (estado FAILED) se informa de inmediato en vez de esperar 2 minutos.
+- La fecha del Markdown sale en español ("27 de octubre de 2026"), no según el idioma de Windows.
+- Ejemplo de marcas de tiempo del prompt para audios de más de 3 horas (el minuto podía pasar de 59).
+
 ## [v3.3] — 2026-08-27
 
 ### 🚀 Transformación a Krypt (App Instalable Windows)

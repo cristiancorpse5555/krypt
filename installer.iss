@@ -1,5 +1,5 @@
 #define MyAppName "Krypt"
-#define MyAppVersion "3.3"
+#define MyAppVersion "3.4"
 #define MyAppPublisher "Cristian Novoa - DMT Agencia"
 #define MyAppExeName "Krypt.exe"
 
@@ -12,7 +12,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=dist_installer
-OutputBaseFilename=Krypt_Setup_v3.3
+OutputBaseFilename=Krypt_Setup_v3.4
 SetupIconFile=assets\icon\krypt.ico
 WizardImageFile=assets\installer\WizardImage-492x942.png
 WizardSmallImageFile=assets\installer\WizardSmallImage-116x116.png

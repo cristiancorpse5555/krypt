@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 echo ========================================================
-echo   Krypt v3.3 - Generador de Instalador para Windows
+echo   Krypt v3.4 - Generador de Instalador para Windows
 echo   Cristian Novoa - DMT Agencia
 echo ========================================================
 echo.
@@ -44,7 +44,7 @@ if errorlevel 1 (
 echo.
 echo ========================================================
 echo   ¡INSTALADOR GENERADO CON ÉXITO!
-echo   Ubicación: dist_installer\Krypt_Setup_v3.3.exe
+echo   Ubicación: dist_installer\Krypt_Setup_v3.4.exe
 echo ========================================================
 echo.
 pause

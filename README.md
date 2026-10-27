@@ -1,4 +1,4 @@
-# 🎙️ Krypt v3.3
+# 🎙️ Krypt v3.4
 
 **Grabador y transcriptor inteligente de reuniones virtuales y audios.**  
 Captura audio del sistema + micrófono, convierte automáticamente a MP3 o importa audios externos (WhatsApp, notas de voz, etc.), y los transcribe con **Google Gemini (Audio Nativo con Diarización de Hablantes)**.
@@ -43,7 +43,7 @@ Captura audio del sistema + micrófono, convierte automáticamente a MP3 o impor
 No requieres tener instalado Python ni FFmpeg. El instalador incluye todo:
 
 ```
-1. Ejecuta: dist_installer\Krypt_Setup_v3.3.exe
+1. Ejecuta: dist_installer\Krypt_Setup_v3.4.exe
 2. Se instalará automáticamente en C:\Program Files\Krypt
 3. Creará el acceso directo en tu Escritorio y Menú Inicio
 4. Al abrir, te pedirá tu Google Gemini API Key (o puedes configurarla desde ⚙️)
@@ -72,7 +72,7 @@ Cuando los cambios estén listos y quieras generar un nuevo instalador para Wind
 ```bash
 # Doble clic en:
 build_installer.bat
-# Genera automáticamente el instalador en dist_installer\Krypt_Setup_v3.3.exe
+# Genera automáticamente el instalador en dist_installer\Krypt_Setup_v3.4.exe
 ```
 
 ---
