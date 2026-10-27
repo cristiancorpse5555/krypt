@@ -1,5 +1,7 @@
 # 🔑 Cómo obtener tu clave de Google Gemini (paso a paso)
 
+<p>🇪🇸 Español · <a href="GET_API_KEY.md">🇬🇧 English</a></p>
+
 Krypt usa la inteligencia artificial **Gemini** de Google para transcribir. Para eso necesita una **clave de API**: un
 código largo que identifica tu cuenta. Es **gratis** para un uso normal y toma unos 3 minutos.
 

@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  🇪🇸 Español · <a href="README.en.md">🇬🇧 English</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/cristiancorpse5555/krypt/releases/latest"><img alt="Descargar" src="https://img.shields.io/github/v/release/cristiancorpse5555/krypt?label=descargar&color=2ea44f"/></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6"/>
   <a href="LICENSE"><img alt="Licencia MIT" src="https://img.shields.io/badge/licencia-MIT-blue"/></a>
@@ -29,6 +33,7 @@ como MP3 liviano y lo transcribe con **Google Gemini**. El resultado es un archi
 
 - 🎧 **Graba la llamada completa:** audio del sistema + micrófono, sincronizados.
 - 👥 **Identifica a cada hablante** y pone la **hora exacta** de cada intervención.
+- 🌎 **Transcribe en el idioma que se habla** (español, inglés y más).
 - 📎 **Importa audios** de WhatsApp (`.ogg`/`.opus`), MP3, WAV, M4A, FLAC y más.
 - ⏸️ **Pausa y reanuda** la grabación cuando quieras.
 - ⏱️ **Reuniones largas sin problema:** las de más de 28 minutos se dividen y se unen solas.
