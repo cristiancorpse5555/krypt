@@ -1,192 +1,123 @@
-# 🎙️ Krypt v3.4
+<p align="center">
+  <img src="assets/icon/krypt-256.png" alt="Krypt" width="120"/>
+</p>
 
-**Grabador y transcriptor inteligente de reuniones virtuales y audios.**  
-Captura audio del sistema + micrófono, convierte automáticamente a MP3 o importa audios externos (WhatsApp, notas de voz, etc.), y los transcribe con **Google Gemini (Audio Nativo con Diarización de Hablantes)**.
+<h1 align="center">Krypt</h1>
 
-> **Creado por Cristian Novoa · DMT Agencia**
+<p align="center">
+  <b>Graba tus reuniones y audios en Windows y transcríbelos con IA, con cada hablante identificado.</b><br/>
+  Zoom · Teams · Meet · llamadas web · notas de voz de WhatsApp
+</p>
 
----
-
-## ✨ Funcionalidades
-
-### 🤖 IA y Transcripción Multi-Modelo (Google Gemini)
-- 🎙️ **Gemini 3.5 Transcribe (Por defecto)** — Modelo nativo de transcripción de Google con diarización acústica de interlocutores (`[Hablante 1]`, `[Hablante 2]`), marcas de tiempo exactas por palabra y cero alucinaciones.
-- ⚡ **Gemini 3.7 Flash** — El modelo Flash más capaz e inteligente de Google, con soporte para workflows agénticos y ejecución multi-paso.
-- 🐢 **Gemini 3.5 Flash Lite** — Opción de altísima velocidad y coste mínimo ($0.30/Mtok).
-- 🔄 **Auto-Selección Inteligente** — Intenta con Gemini 3.5 Transcribe con fallback automático a Gemini 3.7 Flash y 3.5 Flash Lite si se agota la cuota.
-- 👥 **Identificación de hablantes** — Separación de interlocutores y etiquetas consistentes.
-- ⏱️ **Timestamps** — Marcas de tiempo cada intervención `[HH:MM:SS]`.
-- 📝 **Salida Markdown** — Archivo `.md` limpio, formateado y estructurado guardado en `Documentos\Krypt\transcripciones`.
-
-### 🎵 Grabación y Gestión de Audio
-- 🎧 **Captura de audio del sistema** — Captura altavoces/auriculares (Zoom, Teams, Meet, llamadas web, etc.)
-- 🎤 **Micrófono simultáneo** — Tu voz mezclada con la llamada
-- 🎵 **Compresión MP3 Automática (FFmpeg)** — Convierte audios a MP3 mono 48kbps automáticamente. ¡Reduce el tamaño un 93%!
-- 📎 **Subida de Audios Externos** — Importa archivos de WhatsApp (`.ogg`/`.opus`), MP3, WAV, M4A, AAC, FLAC, AMR, WebM, etc.
-- ⏸️ **Pausar / Reanudar** — Pausa la grabación sin perder continuidad.
-- 🚀 **Arranque Instantáneo (Lazy Loading)** — La ventana abre en ~1.5 segundos.
-- ⚡ **RAM Plana (~5MB durante grabación)** — Streaming continuo a disco temporal, evitando saturar memoria en llamadas largas.
-
-### Gestión e Interfaz
-- ⚙️ **Configuración Integrada de API Key** — Diálogo de bienvenida al primer arranque y botón ⚙️ permanente para ingresar, verificar y cambiar tu API Key de Gemini sin tocar código.
-- 📋 **Historial visual** — Tarjetas interactivas con estados (`transcrito`, `error`, `grabado`).
-- 🔄 **Re-transcribir** — Cambia de modelo en cualquier momento y reintenta.
-- ✏️ **Renombrar y 🗑️ Eliminar** — Gestión total de archivos y transcripciones.
-- 📄 **Ver transcripción** — Abre el `.md` directamente desde el historial.
+<p align="center">
+  <a href="https://github.com/cristiancorpse5555/krypt/releases/latest"><img alt="Descargar" src="https://img.shields.io/github/v/release/cristiancorpse5555/krypt?label=descargar&color=2ea44f"/></a>
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6"/>
+  <a href="LICENSE"><img alt="Licencia MIT" src="https://img.shields.io/badge/licencia-MIT-blue"/></a>
+</p>
 
 ---
 
-## 🚀 Instalación en Windows
+## ¿Qué hace?
 
-### Como Usuario Final (Instalador Oficial)
+Krypt graba **al mismo tiempo el sonido de tu PC y tu micrófono** (tú y las demás personas de la llamada), lo guarda
+como MP3 liviano y lo transcribe con **Google Gemini**. El resultado es un archivo de texto (Markdown) así:
 
-No requieres tener instalado Python ni FFmpeg. El instalador incluye todo:
-
-```
-1. Ejecuta: dist_installer\Krypt_Setup_v3.4.exe
-2. Se instalará automáticamente en C:\Program Files\Krypt
-3. Creará el acceso directo en tu Escritorio y Menú Inicio
-4. Al abrir, te pedirá tu Google Gemini API Key (o puedes configurarla desde ⚙️)
+```markdown
+**[00:00:04] [Hablante 1]:** Buenos días, arrancamos con el avance de obra.
+**[00:00:11] [Hablante 2]:** Perfecto. El tramo dos quedó listo el viernes.
 ```
 
-### Configurar API Key de Gemini
-1. Obtén tu clave gratuita en [Google AI Studio](https://aistudio.google.com/apikey).
-2. Pégala en el diálogo inicial de Krypt o haz clic en el ícono de **engranaje (⚙️)** en la barra superior.
-3. Haz clic en **⚡ Probar Conexión** para validar que esté activa.
-4. ¡Listo! La clave se guardará automáticamente en `Documentos\Krypt\config.json`.
+- 🎧 **Graba la llamada completa:** audio del sistema + micrófono, sincronizados.
+- 👥 **Identifica a cada hablante** y pone la **hora exacta** de cada intervención.
+- 📎 **Importa audios** de WhatsApp (`.ogg`/`.opus`), MP3, WAV, M4A, FLAC y más.
+- ⏸️ **Pausa y reanuda** la grabación cuando quieras.
+- ⏱️ **Reuniones largas sin problema:** las de más de 28 minutos se dividen y se unen solas.
+- 🔒 **Tus archivos se quedan en tu PC.** El audio solo sale hacia Google para transcribirse y se borra de allá al terminar.
+- 💸 **Gratis:** usa el nivel gratuito de Google Gemini con tu propia clave.
 
----
+## 📥 Instalación (para cualquier persona)
 
-## 🛠️ Flujo de Trabajo y Desarrollo
+1. Ve a **[Descargas (Releases)](https://github.com/cristiancorpse5555/krypt/releases/latest)** y descarga
+   **`Krypt_Setup_v3.4.exe`** (en la sección *Assets*).
+2. Haz doble clic en el archivo descargado.
+3. **Si Windows muestra "Windows protegió su PC"** (pasa con programas nuevos que no compraron un certificado de firma):
+   pulsa **"Más información"** y luego **"Ejecutar de todas formas"**.
+4. Sigue el asistente (*Siguiente → Instalar*). Krypt queda en el **menú Inicio** y en el **Escritorio**.
+5. Al abrirlo por primera vez te pide tu **clave de Google Gemini** →
+   **[cómo obtenerla gratis, paso a paso](docs/OBTENER_API_KEY.md)** (3 minutos).
 
-### 1. Modo Desarrollo (Modificar y Probar)
-Si deseas hacer cambios en el código o probar funciones nuevas:
-```bash
-# Doble clic en:
-Krypt_Dev.bat
-# Abre la app directamente desde el código fuente sin compilar.
-```
+No necesitas instalar Python ni nada más: el instalador trae todo.
 
-### 2. Generar Nuevo Instalador
-Cuando los cambios estén listos y quieras generar un nuevo instalador para Windows:
-```bash
-# Doble clic en:
-build_installer.bat
-# Genera automáticamente el instalador en dist_installer\Krypt_Setup_v3.4.exe
-```
+**Requisitos:** Windows 10 u 11 de 64 bits, conexión a internet para transcribir, y parlantes o audífonos conectados
+(Windows necesita una salida de audio activa para captar el sonido del PC).
 
----
-
-## 📖 Guía de Uso
+## 🎙️ Cómo se usa
 
 ### Grabar una reunión
+1. Abre Krypt y pulsa **⏺ Grabar**.
+2. Entra a tu reunión (Zoom, Teams, Meet…). Krypt capta lo que suena en el PC y tu micrófono.
+3. Usa **⏸ Pausar / ▶ Reanudar** si lo necesitas.
+4. Pulsa **⏹ Detener**. Krypt guarda el MP3 y **empieza a transcribir solo**.
+5. Al terminar se abre la transcripción.
 
-1. **Abre Krypt** (doble clic en el ícono del escritorio o en `Krypt_Dev.bat`)
-2. **Presiona ⏺ Grabar** → comienza a capturar audio del sistema y micrófono
-3. Inicia o únete a tu reunión virtual (Zoom, Teams, Meet, etc.)
-4. Durante la grabación puedes:
-   - **⏸ Pausar** → El audio se detiene (útil para breaks)
-   - **▶ Reanudar** → Continúa grabando
-5. **Presiona ⏹ Detener** → El audio se guarda e inicia la transcripción automática
-6. **Espera** → La barra de progreso muestra el estado
-7. **Listo** → El archivo `.md` se abre automáticamente al terminar
+### Transcribir un audio que ya tienes
+Pulsa **📎 Subir Audio**, elige el archivo y luego **📤** en su tarjeta.
 
-### Gestionar grabaciones (historial)
+### El historial
+Cada grabación aparece como una tarjeta:
 
-| Acción | Cómo |
+| Botón | Acción |
 |---|---|
-| **Ver transcripción** | Click en 📄 en la tarjeta de la grabación |
-| **Re-transcribir** | Click en 🔄 (si falló o quieres mejor resultado) |
-| **Renombrar** | Click en ✏️ → escribe el nuevo nombre |
-| **Eliminar** | Click en 🗑 → confirma en el diálogo |
-| **Abrir carpeta** | Click en 📂 en el header "Grabaciones" |
+| 📄 | Ver la transcripción |
+| 📤 / 🔄 | Transcribir · reintentar · volver a transcribir con otro modelo |
+| ✏️ | Renombrar |
+| 🗑 | Eliminar el audio y su transcripción |
+| 📂 / 📝 | Abrir la carpeta de audios / de transcripciones |
 
-### Si hay un error de transcripción
+### Elegir el modelo
+En **Modelo IA** puedes elegir:
+- **Gemini 3.5 Transcribe** *(predeterminado)*: transcripción nativa con hablantes y tiempos exactos.
+- **Auto-Seleccionar**: si un modelo se queda sin cuota gratuita, pasa al siguiente.
+- **Gemini 3.7 Flash / 3.5 Flash Lite** y otros: alternativas si se agota la cuota del día.
 
-1. El audio **siempre queda guardado** en `grabaciones/`
-2. La grabación aparece con estado **"Error ✗"** en el historial
-3. Puedes hacer click en **🔄 Reintentar** cuando quieras
-4. Si el error es 503 (servidor ocupado), la app reintenta automáticamente 3 veces con esperas de 15s, 30s y 60s
+### ¿Dónde quedan mis archivos?
+Todo en **`Documentos\Krypt`**: `grabaciones\` (MP3), `transcripciones\` (Markdown) y tu configuración.
 
----
+## 🛠️ Solución de problemas
 
-## 📁 Estructura del Proyecto
+| Problema | Solución |
+|---|---|
+| "No se encontró dispositivo de loopback" | Conecta parlantes o audífonos y elígelos como salida predeterminada de Windows. |
+| "Cuota agotada" (429 / limit: 0) | Se acabó la cuota gratuita del día para ese modelo: elige otro en **Modelo IA** o usa *Auto-Seleccionar*. |
+| "Servidor sobrecargado" (503) | Krypt reintenta solo 3 veces; si sigue, espera unos minutos o cambia de modelo. |
+| "API Key inválida" | Revísala en ⚙️ → *Probar Conexión*. Ver [la guía de la clave](docs/OBTENER_API_KEY.md). |
+| La grabación quedó en silencio | Verifica que el sonido salga por los parlantes/audífonos predeterminados y que el micrófono esté permitido en *Configuración de Windows → Privacidad → Micrófono*. |
 
-```
-Transcriptor/
-│
-├── main.py                      # Aplicación principal (todo el código)
-├── requirements.txt             # Dependencias Python
-├── Transcriptor.bat             # Lanzador con auto-setup
-├── crear_acceso_directo.bat     # Crea ícono en Escritorio (llama al .ps1)
-├── crear_acceso_directo.ps1     # Script PowerShell para el acceso directo
-├── README.md                    # Esta documentación
-├── CHANGELOG.md                 # Historial de versiones
-├── DESARROLLO.md                # Documentación técnica y arquitectura
-│
-├── grabaciones/                 # 💾 Audio WAV (persistente)
-│   ├── recordings.json          # Base de datos de grabaciones (JSON)
-│   ├── REC_20260420_180200.wav  # Archivos de audio
-│   └── ...
-│
-├── transcripciones/             # 📝 Archivos Markdown generados
-│   ├── Transcripcion_2026-04-20_18-02-30.md
-│   └── ...
-│
-└── venv/                        # Entorno virtual Python (auto-generado)
+## 👩‍💻 Para desarrolladores
+
+Krypt está hecho en **Python 3.13** con **PySide6** (interfaz), **PyAudioWPatch** (captura WASAPI), **FFmpeg** (audio) y
+**google-genai** (Gemini). Detalles de arquitectura en [`DESARROLLO.md`](DESARROLLO.md).
+
+```bash
+git clone https://github.com/cristiancorpse5555/krypt.git
+cd krypt
+py -3.13 -m venv venv
+venv\Scripts\pip install -r requirements.txt
 ```
 
----
+1. Descarga FFmpeg para Windows (<https://www.gyan.dev/ffmpeg/builds/>) y copia `ffmpeg.exe` y `ffprobe.exe` en una
+   carpeta `bin\` dentro del proyecto (no se suben al repositorio por su tamaño).
+2. Ejecuta desde el código: **`Krypt_Dev.bat`**.
+3. Genera el instalador: instala [Inno Setup 6](https://jrsoftware.org/isinfo.php) y ejecuta **`build_installer.bat`**
+   → `dist_installer\Krypt_Setup_v3.4.exe`.
 
-## ⚙️ Configuración
+¿Encontraste un error o tienes una idea? Abre un **[Issue](https://github.com/cristiancorpse5555/krypt/issues)**.
+Las contribuciones (*pull requests*) son bienvenidas.
 
-### Cambiar el modelo de Gemini
+## 📄 Licencia
 
-Edita la **línea 21** de `main.py`:
+Código bajo licencia **[MIT](LICENSE)** © 2026 DMT Consultora.
+El instalador incluye componentes de terceros (FFmpeg bajo GPL v3, Qt bajo LGPL v3, entre otros): ver
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-```python
-GEMINI_MODEL = "gemini-3-flash-preview"  # ← Cambia aquí
-```
-
-#### Modelos disponibles (agosto 2026)
-
-| Modelo | Velocidad | Calidad | Free Tier | Notas |
-|---|---|---|---|---|
-| `gemini-3.5-transcribe` | ⚡⚡ Muy rápida | ⭐⭐⭐⭐⭐ | ✅ Sí | **Por Defecto**. Transcripción nativa con diarización acústica y timestamps por palabra. |
-| `gemini-3.7-flash` | ⚡ Muy rápida | ⭐⭐⭐⭐⭐ | ✅ Sí | Modelo Flash generativo más capaz e inteligente. |
-| `gemini-3.6-flash` | ⚡ Rápida | ⭐⭐⭐⭐ | ✅ Sí | Modelo anterior, estable. |
-| `gemini-3.5-flash-lite` | ⚡⚡ Muy rápida | ⭐⭐⭐ | ✅ Sí | Ultra económico ($0.30/Mtok). |
-| `gemini-3.1-pro-preview` | 🐢 Lenta | ⭐⭐⭐⭐⭐ | ❌ Billing | El más capaz. Requiere billing activo. |
-| `groq-whisper` | ⚡⚡⚡ Ultra rápida | ⭐⭐⭐⭐ | ✅ Gratis | Whisper + Llama 3.3 para diarización. |
-
-### Duración de cortes (Chunks dinámicos para reuniones largas)
-
-- **Audios de ≤ 28 minutos**: No se dividen. Se procesan de forma 100% continua en un solo bloque.
-- **Audios de > 28 minutos**: Se dividen en bloques óptimos de 25 minutos (`CHUNK_DURATION_SECONDS = 25 * 60`). Los timestamps acumulativos y offsets de tiempo se calculan y unifican de forma transparente.
-
----
-
-## 🐛 Solución de Problemas
-
-| Problema | Causa | Solución |
-|---|---|---|
-| **"No se encontró dispositivo de loopback"** | No hay salida de audio activa | Conecta auriculares o parlantes como dispositivo predeterminado |
-| **Error 429 "limit: 0"** | El modelo elegido requiere billing | Cambia a un modelo con free tier (ver tabla arriba) |
-| **Error 429 "rate limit"** | Demasiadas solicitudes por minuto | Espera 1-2 minutos y reintenta |
-| **Error 503 "UNAVAILABLE"** | Servidores de Google congestionados | La app reintenta automático. Si persiste, intenta otro modelo. |
-| **Python no encontrado** | Python no está en PATH | Reinstala Python 3.11+ marcando "Add Python to PATH" |
-| **Audio vacío / silencio** | No hay sonido en el sistema | Verifica que el audio esté activo (reproduce algo durante la grabación) |
-| **Transcripción cortada** | Audio muy largo para un solo chunk | Reduce `CHUNK_DURATION_SECONDS` a 20*60 (20 min) |
-| **No se crea acceso directo** | Permisos de Windows | Ejecuta `crear_acceso_directo.bat` como administrador |
-
----
-
-## 🗺️ Roadmap & Evolución a la Nube (Próxima Fase)
-
-Consultar la especificación técnica en [DESARROLLO.md](file:///d:/OneDrive/Documentos/ANTIGRAVITY/Transcriptor/DESARROLLO.md#roadmap--evolución-a-la-nube-vps--bot-de-reuniones) para ver el plan de arquitectura para migrar este proyecto a un **Servicio Web en la Nube (VPS + Subdominio)** con **Bot de Reuniones Automático** (Google Meet, Teams, Zoom).
-
----
-
-## 📜 Licencia
-
-Proyecto personal. Uso libre.
+Krypt no está afiliado a Google. Gemini y Google AI Studio son marcas de Google LLC.

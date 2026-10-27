@@ -1,4 +1,4 @@
-# 🔧 Documentación Técnica — Krypt v3.3
+# 🔧 Documentación Técnica — Krypt v3.4
 
 Documentación de arquitectura, decisiones de diseño, empaquetado y guía para desarrollo continuo.
 
@@ -57,17 +57,24 @@ Documentación de arquitectura, decisiones de diseño, empaquetado y guía para 
 - Pero los frames leídos NO se escriben al disco (`if not self.is_paused: fh.write(data)`)
 - El audio resultante es continuo sin silencios durante la pausa
 
-**Mezcla (post-grabación, chunked):**
-- Lee archivos temp en chunks de 10 segundos (constante `MIX_CHUNK_SECONDS`)
-- Cada chunk: raw PCM → mono float32 → resample a 44100 Hz si necesario
-- Mezcla: `np.clip(loopback * 0.7 + mic * 0.5, -1.0, 1.0)` (clipeo suave en vez de normalización global)
-- Escribe cada chunk procesado al WAV final
-- Salida: WAV mono 16-bit 44.1kHz
+**Sincronía loopback ↔ micrófono (v3.4):**
+- WASAPI loopback **no entrega paquetes mientras no suena nada** en la salida. Sin corrección, la pista del sistema pierde
+  sus silencios y queda desfasada respecto al micrófono (que es continuo).
+- `_start_silence()` reproduce silencio (callback de PortAudio) en la salida predeterminada durante la grabación, así el
+  motor de audio entrega el loopback de forma continua.
+- Red de seguridad en `_record_to_disk()`: compara los frames escritos con el reloj monotónico (descontando pausas) y
+  rellena con ceros cualquier hueco mayor a `LOOPBACK_GAP_FILL_SECONDS` (0,5 s).
+- Si un `stream.read()` falla (dispositivo desconectado) el hilo espera 50 ms en vez de girar al 100% de CPU.
+
+**Mezcla (post-grabación):**
+- **Principal — FFmpeg** (`_mix_with_ffmpeg`): lee los dos `.raw` (`-f s16le`), remuestrea a 48 kHz mono (`aformat`),
+  `amix=duration=longest:normalize=0` + `alimiter`, y codifica directo a **MP3 mono 48 kbps / 44.1 kHz**.
+- **Respaldo — numpy** (si FFmpeg no está): bloques de 10 s (`MIX_CHUNK_SECONDS`), remuestreo por interpolación lineal,
+  `loopback*0.7 + mic*0.5`, la pista corta se completa con ceros. Salida WAV que luego se comprime con `compress_to_mp3`.
+- La mezcla y compresión corren en `SaveRecordingWorker` (QThread) para no congelar la UI.
 
 **Formato de salida:**
-- WAV crudo (sin compresión) para máxima calidad y compatibilidad
-- Tamaño: ~302 MB/hora (~5 MB/minuto)
-- Gemini acepta hasta 2GB por archivo, suficiente para ~6.5 horas
+- MP3 mono 48 kbps (~21 MB/hora). Gemini acepta hasta 2 GB por archivo.
 
 ### 2. RecordingsDB (`main.py`)
 
@@ -224,29 +231,26 @@ client.files.delete(name=uploaded.name)
 
 ## Guía de Modificaciones Comunes
 
-### Cambiar el modelo de IA
+### Cambiar los modelos de IA
 ```python
-# Línea 21 de main.py
-GEMINI_MODEL = "gemini-3-flash-preview"  # Cambia aquí
+# main.py, lista GEMINI_MODELS y GEMINI_MODEL_DEFAULT (al inicio del archivo)
+GEMINI_MODEL_DEFAULT = "gemini-3.5-transcribe"
 ```
 
 ### Cambiar la mezcla de audio (volumen relativo)
 ```python
-# En AudioRecorder._mix_from_disk(), dentro del loop de chunks
-mixed = np.clip(lb_mono[:n] * 0.7 + mc_mono[:n] * 0.5, -1.0, 1.0)
-# Cambia 0.7 y 0.5 para ajustar volúmenes relativos
+# AudioRecorder._mix_with_ffmpeg(): pesos de amix, p. ej. "amix=inputs=2:weights='1 0.8':..."
+# Respaldo numpy en _mix_from_disk(): mixed[...] += lb_mono * 0.7 / mc_mono * 0.5
 ```
 
 ### Cambiar duración de chunks
 ```python
-# Línea ~56 de main.py
-CHUNK_DURATION_SECONDS = 30 * 60  # 30 min (cambiar para más/menos)
+CHUNK_DURATION_SECONDS = 25 * 60  # main.py, sección de modelos
 ```
 
 ### Cambiar delays de retry
 ```python
-# Línea ~58 de main.py
-RETRY_DELAYS = [15, 30, 60]  # segundos entre reintentos
+RETRY_DELAYS = [20, 45, 90]  # main.py, segundos entre reintentos
 ```
 
 ### Cambiar el prompt de transcripción
