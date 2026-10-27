@@ -1,6 +1,6 @@
 #define MyAppName "Krypt"
 #define MyAppVersion "3.4"
-#define MyAppPublisher "Cristian Novoa - DMT Agencia"
+#define MyAppPublisher "DMT Consultora"
 #define MyAppExeName "Krypt.exe"
 
 [Setup]

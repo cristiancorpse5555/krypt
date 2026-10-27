@@ -37,7 +37,7 @@ from PySide6.QtGui import (
 # ═════════════════════════════════════════════════════════════════
 APP_NAME = "Krypt"
 APP_VERSION = "3.4"
-APP_AUTHOR = "Cristian Novoa · DMT Agencia"
+APP_AUTHOR = "DMT Consultora"
 
 # Directorio base del aplicativo (soporta modo script y PyInstaller frozen)
 if getattr(sys, 'frozen', False):
@@ -2030,7 +2030,7 @@ class TranscriptorWindow(QMainWindow):
         cl.addSpacing(8)
 
         # ── Footer ──
-        ft = QLabel(f"Krypt v{APP_VERSION}  •  {APP_AUTHOR}  •  Powered by Gemini AI")
+        ft = QLabel(f"Krypt v{APP_VERSION}  •  {APP_AUTHOR}")
         ft.setObjectName("footer")
         ft.setAlignment(Qt.AlignCenter)
         ft.setFont(QFont("Segoe UI", 8))

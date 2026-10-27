@@ -2,7 +2,7 @@
 chcp 65001 > nul
 echo ========================================================
 echo   Krypt v3.4 - Generador de Instalador para Windows
-echo   Cristian Novoa - DMT Agencia
+echo   DMT Consultora
 echo ========================================================
 echo.
 
