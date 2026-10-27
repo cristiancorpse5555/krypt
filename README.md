@@ -53,10 +53,24 @@ No necesitas instalar Python ni nada más: el instalador trae todo.
 
 ## 🎙️ Cómo se usa
 
+> [!WARNING]
+> **Silenciarte en Teams, Meet o Zoom NO te silencia en Krypt.**
+>
+> Krypt graba directamente el **micrófono del computador**, no el de la reunión. Si apagas el micrófono solo dentro de
+> Teams o Meet, los demás participantes dejan de oírte, **pero Krypt te sigue grabando**: cualquier comentario que hagas
+> "con el micrófono apagado" quedará en la grabación y en la transcripción.
+>
+> **Para que algo no quede grabado, apaga el micrófono del computador**, no solo el de la reunión:
+> - Con la **tecla o botón de silenciar micrófono** del equipo (muchos portátiles tienen una tecla con un micrófono
+>   tachado, o un botón en los audífonos).
+> - O desde Windows: ícono de sonido junto al reloj → silenciar el micrófono.
+> - O pulsa **⏸ Pausar** en Krypt mientras hablas algo que no deba quedar grabado.
+
 ### Grabar una reunión
 1. Abre Krypt y pulsa **⏺ Grabar**.
 2. Entra a tu reunión (Zoom, Teams, Meet…). Krypt capta lo que suena en el PC y tu micrófono.
-3. Usa **⏸ Pausar / ▶ Reanudar** si lo necesitas.
+3. Usa **⏸ Pausar / ▶ Reanudar** si lo necesitas. Recuerda: silenciarte en la reunión no te silencia en Krypt (ver el
+   aviso de arriba).
 4. Pulsa **⏹ Detener**. Krypt guarda el MP3 y **empieza a transcribir solo**.
 5. Al terminar se abre la transcripción.
 
@@ -91,6 +105,7 @@ Todo en **`Documentos\Krypt`**: `grabaciones\` (MP3), `transcripciones\` (Markdo
 | "Cuota agotada" (429 / limit: 0) | Se acabó la cuota gratuita del día para ese modelo: elige otro en **Modelo IA** o usa *Auto-Seleccionar*. |
 | "Servidor sobrecargado" (503) | Krypt reintenta solo 3 veces; si sigue, espera unos minutos o cambia de modelo. |
 | "API Key inválida" | Revísala en ⚙️ → *Probar Conexión*. Ver [la guía de la clave](docs/OBTENER_API_KEY.md). |
+| Quedó grabado algo que dije con el micrófono apagado en la reunión | Krypt graba el micrófono del computador, no el de Teams/Meet. Apaga el micrófono del equipo o usa **⏸ Pausar**. |
 | La grabación quedó en silencio | Verifica que el sonido salga por los parlantes/audífonos predeterminados y que el micrófono esté permitido en *Configuración de Windows → Privacidad → Micrófono*. |
 
 ## 👩‍💻 Para desarrolladores
